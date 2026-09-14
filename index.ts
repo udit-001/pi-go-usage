@@ -790,12 +790,11 @@ export default function (pi: ExtensionAPI) {
   };
 
   // ─── Ambient footer status (pi-powerline-footer extension_statuses) ────
-  // News-only: nothing appears while no window can cut the user off or while
-  // the selected model is not an opencode-go model. When a window passes the
-  // meter's warning line, the marker appears showing the ONE window closest
-  // to its cap (`GO wk 87%`, amber); at the cap it goes red with the plain
-  // state word (`GO mo limit`). Because it is normally absent, appearing is
-  // itself the cue — no wallpaper, nothing to habituate to.
+  // Always-on current usage while an opencode-go model is selected: the ONE
+  // window closest to its cap, wherever it is in the ladder. Muted below the
+  // meter's warning line (still informative — a fuel gauge, not wallpaper,
+  // since the number changes), amber at 75%, red with the plain state word
+  // at 90% or when rate-limited. Nothing shows at all on non-Go models.
   // Follows pi-mcp-adapter's status pattern: cheap pure computation, styled
   // with the current theme, and only pushed when the visible text changed,
   // so the 5-minute poll touches the bar only when the signal does. The
@@ -809,7 +808,7 @@ export default function (pi: ExtensionAPI) {
   let goStatusInFlight = false;
   let goStatusShown: string | undefined;
 
-  type GoStatusTier = "warn" | "error";
+  type GoStatusTier = "ok" | "warn" | "error";
 
   // Returns undefined when there is nothing worth showing (the bar is
   // cleared); otherwise the plain text plus the tier used to style it.
@@ -838,11 +837,14 @@ export default function (pi: ExtensionAPI) {
       const text = pct % 1 === 0 ? `${Math.round(pct)}%` : `${(Math.round(pct * 10) / 10).toFixed(1)}%`;
       return { text: `GO ${tag} ${text}`, tier: "warn" };
     }
-    // Below the warning line there is no news — stay out of the bar.
-    return undefined;
+    // Calm tier: still the tightest window's current usage — muted, but the
+    // number moves, so it carries information instead of being wallpaper.
+    const text = pct % 1 === 0 ? `${Math.round(pct)}%` : `${(Math.round(pct * 10) / 10).toFixed(1)}%`;
+    return { text: `GO ${tag} ${text}`, tier: "ok" };
   };
 
-  const TIER_COLORS: Record<GoStatusTier, "warning" | "error"> = {
+  const TIER_COLORS: Record<GoStatusTier, "muted" | "warning" | "error"> = {
+    ok: "muted",
     warn: "warning",
     error: "error",
   };

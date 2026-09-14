@@ -1,12 +1,21 @@
 # pi-go-usage
 
-See how much of your OpenCode Go plan is left while you work. `/usage` reads OpenCode's official usage API and renders one bar per window: the last 5 hours ($12), the week ($30), the month ($60), with percent used, dollars left, and when each window resets.
+See how much of your OpenCode Go plan is left while you work: one bar per window, the last 5 hours ($12), the week ($30), the month ($60), with percent used, dollars left, and when each window resets.
 
 ## Install
 
 ```bash
 pi install git:github.com/udit-001/pi-go-usage
 ```
+
+## What you get
+
+- **Read one bar per window** — last 5 hours ($12), the week ($30), the month ($60)
+- **Track dollars left** — from used-percent against OpenCode's published caps
+- **See reset times** — when each window rolls over
+- **Read honest failures** — a 403 meaning "no Go subscription" says so and shows how to sign in
+
+Your key goes to `https://opencode.ai/zen/go/v1/usage` and nowhere else. Nothing is scraped.
 
 ## Sign in
 
@@ -24,18 +33,15 @@ Keys resolve in this order, so set any one:
 
 `r` refreshes. `q` or `Esc` closes. `/usage close` closes it from the prompt.
 
-## Keep it in your status bar
+## Status bar (optional)
 
-Install [`pi-powerline-footer`](https://github.com/udit-001/pi-powerline-footer) and the marker appears only when there's news: `GO wk 87%` (amber) when a window is three-quarters spent, `GO wk limit` (red) when one has actually capped you. It shows the single window closest to its cap — the last 5 hours, the week, or the month, whichever is tightest. Below the warning line, or while you're on a model that doesn't drain the Go plan (pi-zen free, openrouter, codex…), nothing shows at all — the bar only changes when there's something you'd act on. It refreshes every 5 minutes, only while an opencode-go model is selected, and only re-renders when the text changes. No key, no subscription, or a dead API hides it quietly; `/usage` is the place that explains why. Both read the same official endpoint, and neither needs the other.
+With [`pi-powerline-footer`](https://github.com/udit-001/pi-powerline-footer) installed, the tightest window's usage sits in your bar while you run an opencode-go model:
 
-## What you get
+- `GO 5h 31%` (muted) — current usage, tightest of the three windows
+- `GO wk 87%` (amber) — a window has crossed 75%
+- `GO wk limit` (red) — a window has capped you
 
-- **Watch three windows** — last 5 hours ($12), the week ($30), the month ($60)
-- **Track dollars left** — from used-percent against OpenCode's published caps
-- **See reset times** — when each window rolls over
-- **Read honest failures** — a 403 that means "no Go subscription" says so and shows how to authenticate
-
-Your key goes to `https://opencode.ai/zen/go/v1/usage` and nowhere else. Nothing is scraped.
+Refreshes every 5 minutes. Non-Go models, a missing key, or a dead API show nothing; `/usage` explains why. The meter and the bar work independently.
 
 ## Develop
 
