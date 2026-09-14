@@ -2,6 +2,36 @@
 
 See how much of your OpenCode Go plan is left while you work: one bar per window, the last 5 hours ($12), the week ($30), the month ($60), with percent used, dollars left, and when each window resets.
 
+## What it looks like
+
+`/usage` — three windows, one row each:
+
+```text
+────────────────────────────────────────────────────────────────────────
+ OpenCode Go
+
+ 5h        █████████████░░░░░░░░░░░░░░░░░   42% used
+          $6.96 left · resets Oct 9, 4:37 PM UTC
+
+ Weekly    ██████████████████████████░░░░   88% used
+          $3.60 left · resets Oct 11, 4:37 PM UTC
+
+ Monthly   ███████████████████░░░░░░░░░░░   64% used
+          $21.60 left · resets Oct 20, 4:37 PM UTC
+
+ key: pi-auth#opencode-go · updated 2:37 PM
+ r refresh · q / Esc close
+────────────────────────────────────────────────────────────────────────
+```
+
+With the footer, the tightest window rides in your status bar, the color escalating as it climbs:
+
+```text
+GO 5h 31%     calm (muted)
+GO wk 87%     warning (amber)
+GO mo limit   capped (red)
+```
+
 ## Install
 
 ```bash
@@ -35,13 +65,7 @@ Keys resolve in this order, so set any one:
 
 ## Status bar (optional)
 
-With [`pi-powerline-footer`](https://github.com/udit-001/pi-powerline-footer) installed, the tightest window's usage sits in your bar while you run an opencode-go model:
-
-- `GO 5h 31%` (muted) — current usage, tightest of the three windows
-- `GO wk 87%` (amber) — a window has crossed 75%
-- `GO wk limit` (red) — a window has capped you
-
-Refreshes every 5 minutes. Non-Go models, a missing key, or a dead API show nothing; `/usage` explains why. The meter and the bar work independently.
+Install [`pi-powerline-footer`](https://github.com/udit-001/pi-powerline-footer) and the tightest window rides in your bar while you're on an opencode-go model (the states are pictured above). It refreshes every 5 minutes. Non-Go models, a missing key, or a dead API show nothing; `/usage` explains why. The meter and the bar work independently.
 
 ## Develop
 
