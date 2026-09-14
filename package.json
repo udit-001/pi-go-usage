@@ -1,0 +1,42 @@
+{
+  "name": "pi-go-usage",
+  "version": "0.1.0",
+  "description": "OpenCode Go usage in pi — 5h / weekly / monthly spend remaining via the official API.",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "opencode",
+    "opencode-go",
+    "usage",
+    "quota",
+    "meter"
+  ],
+  "files": [
+    "index.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@earendil-works/pi-tui": "0.85.1",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}
