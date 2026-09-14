@@ -790,28 +790,74 @@ export default function (pi: ExtensionAPI) {
   };
 
   // ─── Ambient footer status (pi-powerline-footer extension_statuses) ────
-  // One compact signal in the status bar: the 5h window only — the window
-  // that can cut you off mid-session. The full three-window view stays in
-  // /usage. Refreshed every 5 minutes like the footer's own usage monitors;
-  // cleared when there is no key, no subscription, or the API fails.
+  // A traffic-light GO in the status bar: `GO` sits quietly when nothing can
+  // cut the user off; `GO wk 87%` (amber) shows the ONE window closest to its
+  // cap once it passes the meter's warning line; `GO wk limit` (red) when a
+  // window has actually capped spend. Weekly/monthly appear exactly when they
+  // are the tightest window — whichever can really cut off the next prompt.
+  // Follows pi-mcp-adapter's status pattern: cheap pure computation, styled
+  // with the current theme, and only pushed when the visible text changed,
+  // so a 5-minute poll touches the bar only when the signal does.
   const GO_STATUS_REFRESH_MS = 5 * 60_000;
+  const GO_STATUS_WARN_PCT = 75;
+  const GO_STATUS_ERROR_PCT = 90;
+  const GO_STATUS_TAGS: Record<string, string> = { "5h": "5h", Weekly: "wk", Monthly: "mo" };
   let goStatusTimer: NodeJS.Timeout | null = null;
   let goStatusInFlight = false;
+  let goStatusShown: string | undefined;
 
-  const goStatusText = (state: GoUsageState | undefined): string | undefined => {
+  type GoStatusTier = "ok" | "warn" | "error";
+
+  // Returns undefined when there is nothing worth showing (and the bar is
+  // cleared); otherwise the plain text plus the tier used to style it.
+  const goStatusContent = (
+    state: GoUsageState | undefined,
+  ): { text: string; tier: GoStatusTier } | undefined => {
     if (!state || state.state !== "ready") {
       return undefined;
     }
-    const rolling = state.windows.find((w) => w.label === "5h");
-    if (!rolling) {
+    let tightest: UsageWindow | undefined;
+    for (const w of state.windows) {
+      const pct = w.usedPercent ?? 0;
+      if (!tightest || pct > (tightest.usedPercent ?? 0)) {
+        tightest = w;
+      }
+    }
+    if (!tightest) {
       return undefined;
     }
-    if (rolling.statusLabel === "limited") {
-      return "GO ⛔";
+    const tag = GO_STATUS_TAGS[tightest.label] ?? tightest.label;
+    const pct = tightest.usedPercent ?? 0;
+    if (tightest.statusLabel === "limited" || pct >= GO_STATUS_ERROR_PCT) {
+      return { text: `GO ${tag} limit`, tier: "error" };
     }
-    const pct = rolling.usedPercent ?? 0;
-    const text = pct < 10 && pct % 1 !== 0 ? `${pct.toFixed(1)}%` : `${Math.round(pct)}%`;
-    return `GO ${text}`;
+    if (pct >= GO_STATUS_WARN_PCT) {
+      const text = pct % 1 === 0 ? `${Math.round(pct)}%` : `${(Math.round(pct * 10) / 10).toFixed(1)}%`;
+      return { text: `GO ${tag} ${text}`, tier: "warn" };
+    }
+    return { text: "GO", tier: "ok" };
+  };
+
+  const TIER_COLORS: Record<GoStatusTier, "muted" | "warning" | "error"> = {
+    ok: "muted",
+    warn: "warning",
+    error: "error",
+  };
+
+  const pushGoStatus = (ui: ExtensionUIContext, content: { text: string; tier: GoStatusTier } | undefined) => {
+    const text = content?.text;
+    if (text === undefined || text === goStatusShown) {
+      if (text === undefined) {
+        goStatusShown = undefined;
+        ui.setStatus("pi-go-usage", undefined);
+      }
+      return;
+    }
+    goStatusShown = text;
+    const theme = ui.theme;
+    const styled =
+      typeof theme?.fg === "function" ? theme.fg(TIER_COLORS[content!.tier], text) : text;
+    ui.setStatus("pi-go-usage", styled);
   };
 
   const refreshGoStatus = async (ui: ExtensionUIContext) => {
@@ -822,12 +868,12 @@ export default function (pi: ExtensionAPI) {
     try {
       const auth = await resolveGoApiKey();
       if (!auth.key) {
-        ui.setStatus("pi-go-usage", undefined);
+        pushGoStatus(ui, undefined);
         return;
       }
-      ui.setStatus("pi-go-usage", goStatusText(await fetchGoUsageState(auth.key)));
+      pushGoStatus(ui, goStatusContent(await fetchGoUsageState(auth.key)));
     } catch {
-      ui.setStatus("pi-go-usage", undefined);
+      pushGoStatus(ui, undefined);
     } finally {
       goStatusInFlight = false;
     }
@@ -851,6 +897,7 @@ export default function (pi: ExtensionAPI) {
       clearInterval(goStatusTimer);
       goStatusTimer = null;
     }
+    goStatusShown = undefined;
     ctx.ui.setStatus("pi-go-usage", undefined);
   });
 
