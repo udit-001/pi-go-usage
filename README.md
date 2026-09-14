@@ -24,7 +24,7 @@ See how much of your OpenCode Go plan is left while you work: one bar per window
 ────────────────────────────────────────────────────────────────────────
 ```
 
-With the footer, the tightest window rides in your status bar, the color escalating as it climbs:
+With the footer, the same window sits in your status bar:
 
 ```text
 GO 5h 31%     calm (muted)
@@ -65,7 +65,7 @@ Keys resolve in this order, so set any one:
 
 ## Status bar (optional)
 
-Install [`pi-powerline-footer`](https://github.com/udit-001/pi-powerline-footer) and the tightest window rides in your bar while you're on an opencode-go model (the states are pictured above). It refreshes every 5 minutes. Non-Go models, a missing key, or a dead API show nothing; `/usage` explains why. The meter and the bar work independently.
+Install [`pi-powerline-footer`](https://github.com/udit-001/pi-powerline-footer) and the states above sit in your bar while you're on an opencode-go model. It refreshes every 5 minutes. Non-Go models, a missing key, or a dead API show nothing; `/usage` explains why. The meter and the bar work independently.
 
 ## Develop
 
