@@ -13,8 +13,8 @@ pi install git:github.com/udit-001/pi-go-usage
 Keys resolve in this order, so set any one:
 
 1. `OPENCODE_GO_API_KEY` or `OPENCODE_API_KEY` in the environment
-2. `~/.local/share/opencode/auth.json`, if you use the opencode CLI
-3. `/login opencode` inside pi
+2. the `opencode-go` entry in pi's auth store, or `/login opencode` inside pi
+3. the opencode CLI's `auth.json` — `$XDG_DATA_HOME/opencode/auth.json`, else `~/.local/share/opencode/auth.json` (same path on Linux, macOS, and Windows)
 
 ## Use
 

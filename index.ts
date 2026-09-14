@@ -27,9 +27,11 @@ import { join } from "node:path";
 //
 // Auth is resolved in this order (first hit wins):
 //   1. env OPENCODE_GO_API_KEY, then OPENCODE_API_KEY
-//   2. the opencode CLI's auth file — $XDG_DATA_HOME/opencode/auth.json or
-//      ~/.local/share/opencode/auth.json — entries "opencode-go", then "opencode"
-//   3. pi's own auth store under the "opencode" provider (/login opencode)
+//   2. pi auth — the "opencode-go" entry first (the key that carries a Go
+//      subscription), then "opencode" (/login opencode)
+//   3. the opencode CLI's auth.json — $XDG_DATA_HOME/opencode/auth.json else
+//      ~/.local/share/opencode/auth.json (same on Linux, macOS and Windows),
+//      entries "opencode-go", then "opencode"
 //
 // Surface: one command. `/usage` opens the meter inline, in place of the
 // editor — the same slot and look pi's built-in selectors use (a thin theme
@@ -39,7 +41,6 @@ import { join } from "node:path";
 const PROVIDER_LABEL = "OpenCode Go";
 const GO_USAGE_URL = "https://opencode.ai/zen/go/v1/usage";
 const REQUEST_TIMEOUT_MS = 15_000;
-const OPENCODE_AUTH_RELATIVE_PATH = join(".local", "share", "opencode", "auth.json");
 
 /** Official OpenCode Go spend caps, per window. @see https://opencode.ai/docs/go/ */
 const GO_WINDOW_LIMITS_USD = { rolling: 12, weekly: 30, monthly: 60 } as const;
@@ -159,7 +160,9 @@ function firstEnv(names: readonly string[]): { value: string; name: string } | u
 
 function readJsonFile(path: string): unknown {
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as unknown;
+    // Strip a UTF-8 BOM — Windows editors may add one and JSON.parse would choke.
+    const text = readFileSync(path, "utf8").replace(/^\uFEFF/, "");
+    return JSON.parse(text) as unknown;
   } catch {
     return undefined;
   }
@@ -184,14 +187,31 @@ function extractApiKey(credential: unknown): string | undefined {
 // Everything about *where a Go key can come from* lives here, behind one small
 // interface: resolveGoApiKey() → { key?, source? }.
 
-function readOpenCodeAuthFile(): Record<string, unknown> | undefined {
-  const xdg = process.env.XDG_DATA_HOME?.trim();
-  const candidates = [
-    xdg ? join(xdg, "opencode", "auth.json") : undefined,
-    join(homedir(), OPENCODE_AUTH_RELATIVE_PATH),
-  ].filter((path): path is string => Boolean(path));
+/**
+ * opencode's auth.json lives at xdgData() + /opencode, where xdgData is
+ * $XDG_DATA_HOME else ~/.local/share — on every platform (the CLI uses the
+ * xdg-basedir package, which has no platform branching: no ~/Library on macOS,
+ * no %APPDATA% on Windows).
+ */
+function openCodeAuthCandidates(): string[] {
+  const candidates: string[] = [];
 
-  for (const path of candidates) {
+  // Explicit escape hatch: point at the file directly.
+  const override = process.env.OPENCODE_AUTH_FILE?.trim();
+  if (override) {
+    candidates.push(override);
+  }
+
+  const xdg = process.env.XDG_DATA_HOME?.trim();
+  if (xdg) {
+    candidates.push(join(xdg, "opencode", "auth.json"));
+  }
+  candidates.push(join(homedir(), ".local", "share", "opencode", "auth.json"));
+  return candidates;
+}
+
+function readOpenCodeAuthFile(): Record<string, unknown> | undefined {
+  for (const path of openCodeAuthCandidates()) {
     if (!existsSync(path)) {
       continue;
     }
@@ -235,34 +255,50 @@ function fileKeySource(pathLabel: string, entry: string): string {
   return `${pathLabel}#${entry}`;
 }
 
-async function piStoredKey(provider: string): Promise<{ key?: string; source: string } | undefined> {
+/**
+ * pi's own auth store, Go entry first. `opencode-go` is the credential that
+ * carries a Go subscription; `opencode` may be a web OAuth token whose account
+ * has no Go (which would surface as a 403 "no subscription").
+ */
+async function piStoredKey(): Promise<{ key?: string; source: string } | undefined> {
   const storage = createPiAuthStorage();
-  if (storage) {
-    const key = (await storage.getApiKey(provider, { includeFallback: true }))?.trim();
-    return key ? { key, source: "pi-auth" } : undefined;
-  }
-
-  const record = readPiAuthFile();
-  for (const entry of ["opencode", "opencode-go"]) {
-    const credential = record ? asRecord(record[entry]) : undefined;
-    let key: string | undefined;
-    if (credential?.type === "oauth" && typeof credential.access === "string") {
-      key = credential.access.trim();
+  for (const entry of ["opencode-go", "opencode"]) {
+    if (storage) {
+      try {
+        const key = (await storage.getApiKey(entry, { includeFallback: true }))?.trim();
+        if (key) {
+          return { key, source: `pi-auth#${entry}` };
+        }
+      } catch {
+        // Storage may not recognise this provider name; try the next entry.
+      }
     } else {
-      key = extractApiKey(credential);
-    }
-    if (key) {
-      return { key, source: `~/.pi/agent/auth.json#${entry}` };
+      const record = readPiAuthFile();
+      const credential = record ? asRecord(record[entry]) : undefined;
+      let key: string | undefined;
+      if (credential?.type === "oauth" && typeof credential.access === "string") {
+        key = credential.access.trim();
+      } else {
+        key = extractApiKey(credential);
+      }
+      if (key) {
+        return { key, source: `~/.pi/agent/auth.json#${entry}` };
+      }
     }
   }
   return undefined;
 }
 
-/** Resolve a Go API key. First hit wins: env → opencode CLI auth file → pi auth. */
+/** Resolve a Go API key. First hit wins: env → pi auth → opencode CLI auth file. */
 export async function resolveGoApiKey(): Promise<GoAuthResolution> {
   const goEnv = firstEnv(GO_API_KEY_ENV);
   if (goEnv) {
     return { key: goEnv.value, source: `env:${goEnv.name}` };
+  }
+
+  const stored = await piStoredKey();
+  if (stored?.key) {
+    return { key: stored.key, source: stored.source };
   }
 
   const localAuth = readOpenCodeAuthFile();
@@ -273,11 +309,6 @@ export async function resolveGoApiKey(): Promise<GoAuthResolution> {
   const localZenKey = extractApiKey(localAuth?.opencode);
   if (localZenKey) {
     return { key: localZenKey, source: fileKeySource("opencode auth.json", "opencode") };
-  }
-
-  const stored = await piStoredKey("opencode");
-  if (stored?.key) {
-    return { key: stored.key, source: stored.source };
   }
 
   return {};
