@@ -24,6 +24,10 @@ Keys resolve in this order, so set any one:
 
 `r` refreshes. `q` or `Esc` closes. `/usage close` closes it from the prompt.
 
+## Keep it in your status bar
+
+Install [`pi-powerline-footer`](https://github.com/udit-001/pi-powerline-footer) and the last-5-hours window shows up there too — `GO 12%`, refreshing every 5 minutes, `GO ⛔` when you're rate-limited. No key, no subscription, or a dead API hides it quietly; the meter is the place that explains why. The two read the same official endpoint, and neither needs the other.
+
 ## What you get
 
 - **Watch three windows** — last 5 hours ($12), the week ($30), the month ($60)

@@ -1,4 +1,10 @@
-import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionCommandContext,
+  ExtensionContext,
+  ExtensionUIContext,
+  Theme,
+} from "@earendil-works/pi-coding-agent";
 import * as PiCodingAgent from "@earendil-works/pi-coding-agent";
 import {
   Key,
@@ -782,6 +788,71 @@ export default function (pi: ExtensionAPI) {
         closeMeter = null;
       });
   };
+
+  // ─── Ambient footer status (pi-powerline-footer extension_statuses) ────
+  // One compact signal in the status bar: the 5h window only — the window
+  // that can cut you off mid-session. The full three-window view stays in
+  // /usage. Refreshed every 5 minutes like the footer's own usage monitors;
+  // cleared when there is no key, no subscription, or the API fails.
+  const GO_STATUS_REFRESH_MS = 5 * 60_000;
+  let goStatusTimer: NodeJS.Timeout | null = null;
+  let goStatusInFlight = false;
+
+  const goStatusText = (state: GoUsageState | undefined): string | undefined => {
+    if (!state || state.state !== "ready") {
+      return undefined;
+    }
+    const rolling = state.windows.find((w) => w.label === "5h");
+    if (!rolling) {
+      return undefined;
+    }
+    if (rolling.statusLabel === "limited") {
+      return "GO ⛔";
+    }
+    const pct = rolling.usedPercent ?? 0;
+    const text = pct < 10 && pct % 1 !== 0 ? `${pct.toFixed(1)}%` : `${Math.round(pct)}%`;
+    return `GO ${text}`;
+  };
+
+  const refreshGoStatus = async (ui: ExtensionUIContext) => {
+    if (goStatusInFlight) {
+      return;
+    }
+    goStatusInFlight = true;
+    try {
+      const auth = await resolveGoApiKey();
+      if (!auth.key) {
+        ui.setStatus("pi-go-usage", undefined);
+        return;
+      }
+      ui.setStatus("pi-go-usage", goStatusText(await fetchGoUsageState(auth.key)));
+    } catch {
+      ui.setStatus("pi-go-usage", undefined);
+    } finally {
+      goStatusInFlight = false;
+    }
+  };
+
+  pi.on("session_start", (event, ctx: ExtensionContext) => {
+    if (ctx.mode !== "tui") {
+      return;
+    }
+    if (goStatusTimer) {
+      clearInterval(goStatusTimer);
+    }
+    void refreshGoStatus(ctx.ui);
+    goStatusTimer = setInterval(() => {
+      void refreshGoStatus(ctx.ui);
+    }, GO_STATUS_REFRESH_MS);
+  });
+
+  pi.on("session_shutdown", (event, ctx: ExtensionContext) => {
+    if (goStatusTimer) {
+      clearInterval(goStatusTimer);
+      goStatusTimer = null;
+    }
+    ctx.ui.setStatus("pi-go-usage", undefined);
+  });
 
   pi.registerCommand("usage", {
     description: "Show OpenCode Go usage (5h / weekly / monthly) inline. /usage close to dismiss.",
