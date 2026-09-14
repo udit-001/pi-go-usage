@@ -26,7 +26,7 @@ Keys resolve in this order, so set any one:
 
 ## Keep it in your status bar
 
-Install [`pi-powerline-footer`](https://github.com/udit-001/pi-powerline-footer) and a small `GO` marker appears in the bar. It's deliberately calm: `GO` sits quietly in the theme's muted color while nothing can cut you off, then speaks up only when a window matters — `GO wk 87%` (amber) when a window is three-quarters spent, `GO wk limit` (red) when one has actually capped you. It always shows the single window closest to its cap — the last 5 hours, the week, or the month, whichever is tightest — so weekly and monthly usage appear exactly when they're the ones about to bite. It refreshes every 5 minutes and only re-renders when the text changes. No key, no subscription, or a dead API hides it quietly; `/usage` is the place that explains why. Both read the same official endpoint, and neither needs the other.
+Install [`pi-powerline-footer`](https://github.com/udit-001/pi-powerline-footer) and the marker appears only when there's news: `GO wk 87%` (amber) when a window is three-quarters spent, `GO wk limit` (red) when one has actually capped you. It shows the single window closest to its cap — the last 5 hours, the week, or the month, whichever is tightest. Below the warning line, or while you're on a model that doesn't drain the Go plan (pi-zen free, openrouter, codex…), nothing shows at all — the bar only changes when there's something you'd act on. It refreshes every 5 minutes, only while an opencode-go model is selected, and only re-renders when the text changes. No key, no subscription, or a dead API hides it quietly; `/usage` is the place that explains why. Both read the same official endpoint, and neither needs the other.
 
 ## What you get
 

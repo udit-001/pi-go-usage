@@ -790,25 +790,28 @@ export default function (pi: ExtensionAPI) {
   };
 
   // ─── Ambient footer status (pi-powerline-footer extension_statuses) ────
-  // A traffic-light GO in the status bar: `GO` sits quietly when nothing can
-  // cut the user off; `GO wk 87%` (amber) shows the ONE window closest to its
-  // cap once it passes the meter's warning line; `GO wk limit` (red) when a
-  // window has actually capped spend. Weekly/monthly appear exactly when they
-  // are the tightest window — whichever can really cut off the next prompt.
+  // News-only: nothing appears while no window can cut the user off or while
+  // the selected model is not an opencode-go model. When a window passes the
+  // meter's warning line, the marker appears showing the ONE window closest
+  // to its cap (`GO wk 87%`, amber); at the cap it goes red with the plain
+  // state word (`GO mo limit`). Because it is normally absent, appearing is
+  // itself the cue — no wallpaper, nothing to habituate to.
   // Follows pi-mcp-adapter's status pattern: cheap pure computation, styled
   // with the current theme, and only pushed when the visible text changed,
-  // so a 5-minute poll touches the bar only when the signal does.
+  // so the 5-minute poll touches the bar only when the signal does. The
+  // monitor runs only while an opencode-go model is selected.
   const GO_STATUS_REFRESH_MS = 5 * 60_000;
   const GO_STATUS_WARN_PCT = 75;
   const GO_STATUS_ERROR_PCT = 90;
+  const GO_MODEL_PROVIDER = "opencode-go";
   const GO_STATUS_TAGS: Record<string, string> = { "5h": "5h", Weekly: "wk", Monthly: "mo" };
   let goStatusTimer: NodeJS.Timeout | null = null;
   let goStatusInFlight = false;
   let goStatusShown: string | undefined;
 
-  type GoStatusTier = "ok" | "warn" | "error";
+  type GoStatusTier = "warn" | "error";
 
-  // Returns undefined when there is nothing worth showing (and the bar is
+  // Returns undefined when there is nothing worth showing (the bar is
   // cleared); otherwise the plain text plus the tier used to style it.
   const goStatusContent = (
     state: GoUsageState | undefined,
@@ -835,11 +838,11 @@ export default function (pi: ExtensionAPI) {
       const text = pct % 1 === 0 ? `${Math.round(pct)}%` : `${(Math.round(pct * 10) / 10).toFixed(1)}%`;
       return { text: `GO ${tag} ${text}`, tier: "warn" };
     }
-    return { text: "GO", tier: "ok" };
+    // Below the warning line there is no news — stay out of the bar.
+    return undefined;
   };
 
-  const TIER_COLORS: Record<GoStatusTier, "muted" | "warning" | "error"> = {
-    ok: "muted",
+  const TIER_COLORS: Record<GoStatusTier, "warning" | "error"> = {
     warn: "warning",
     error: "error",
   };
@@ -879,24 +882,48 @@ export default function (pi: ExtensionAPI) {
     }
   };
 
-  pi.on("session_start", (event, ctx: ExtensionContext) => {
-    if (ctx.mode !== "tui") {
-      return;
-    }
-    if (goStatusTimer) {
-      clearInterval(goStatusTimer);
-    }
-    void refreshGoStatus(ctx.ui);
-    goStatusTimer = setInterval(() => {
-      void refreshGoStatus(ctx.ui);
-    }, GO_STATUS_REFRESH_MS);
-  });
-
-  pi.on("session_shutdown", (event, ctx: ExtensionContext) => {
+  const stopGoStatusTimer = () => {
     if (goStatusTimer) {
       clearInterval(goStatusTimer);
       goStatusTimer = null;
     }
+  };
+
+  // The monitor exists only while the selected model is an opencode-go
+  // model: those are the only models that drain the Go windows. Switching
+  // to a free (pi-zen), openrouter, or codex model clears the marker and
+  // stops the polling entirely.
+  const setGoStatusForModel = (model: { provider?: string } | undefined, ui: ExtensionUIContext) => {
+    if (model?.provider === GO_MODEL_PROVIDER) {
+      if (!goStatusTimer) {
+        goStatusTimer = setInterval(() => {
+          void refreshGoStatus(ui);
+        }, GO_STATUS_REFRESH_MS);
+      }
+      void refreshGoStatus(ui);
+    } else {
+      stopGoStatusTimer();
+      pushGoStatus(ui, undefined);
+    }
+  };
+
+  pi.on("session_start", (event, ctx: ExtensionContext) => {
+    if (ctx.mode !== "tui") {
+      return;
+    }
+    setGoStatusForModel(ctx.model, ctx.ui);
+  });
+
+  // Fires on /model, model cycling, and session restore with the new model.
+  pi.on("model_select", (event, ctx: ExtensionContext) => {
+    if (ctx.mode !== "tui") {
+      return;
+    }
+    setGoStatusForModel(event.model, ctx.ui);
+  });
+
+  pi.on("session_shutdown", (event, ctx: ExtensionContext) => {
+    stopGoStatusTimer();
     goStatusShown = undefined;
     ctx.ui.setStatus("pi-go-usage", undefined);
   });
