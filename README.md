@@ -43,6 +43,7 @@ pi install git:github.com/udit-001/pi-go-usage
 - **Read one bar per window** — last 5 hours ($12), the week ($30), the month ($60)
 - **Track dollars left** — from used-percent against OpenCode's published caps
 - **See reset times** — when each window rolls over
+- **Peak-pricing toast** — switching to a DeepSeek Go model during peak hours (Mon–Fri, 01:00–04:00 and 06:00–10:00 UTC) warns you're paying 2x and when it ends. Off-peak, weekends, and other models stay silent
 - **Read honest failures** — a 403 meaning "no Go subscription" says so and shows how to sign in
 
 Your key goes to `https://opencode.ai/zen/go/v1/usage` and nowhere else. Nothing is scraped.

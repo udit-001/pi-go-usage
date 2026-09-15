@@ -453,6 +453,73 @@ export async function fetchGoUsageState(
   };
 }
 
+// ─── DeepSeek peak pricing notice ───────────────────────────────────────────
+//
+// Four Go models bill at peak/off-peak rates: peak = 01:00–04:00 and
+// 06:00–10:00 UTC, Monday–Friday; off-peak is exactly half price. Both the
+// model list and the windows are server-side pricing terms that drift —
+// check them against https://opencode.ai/docs/go/#usage-limits when this
+// misfires. The whole rule hides behind one pure function so callers (and
+// tests) never learn the windows, the weekday math, or the wording.
+
+/** DeepSeek Go models billed at peak/off-peak rates. @see https://opencode.ai/docs/go/ */
+const DEEPSEEK_PEAK_MODEL_IDS = new Set([
+  "deepseek-v4.1-flash",
+  "deepseek-v4-pro",
+  "deepseek-v4-flash",
+  "deepseek-v4-flash-vision-exp",
+]);
+
+/** Peak windows as [startHour, endHour) UTC, Monday–Friday only. */
+const DEEPSEEK_PEAK_WINDOWS_UTC: ReadonlyArray<readonly [number, number]> = [
+  [1, 4],
+  [6, 10],
+];
+
+const PEAK_END_FORMAT = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+export interface PeakNotice {
+  text: string;
+  level: "info" | "warning" | "error";
+}
+
+/**
+ * Peak-pricing toast for a model switch, or undefined when there is nothing
+ * worth saying — non-Go models, non-peak-priced models, off-peak hours, and
+ * weekends all stay silent.
+ */
+export function deepseekPeakNotice(
+  model: { provider?: string; id?: string } | undefined,
+  now: Date = new Date(),
+): PeakNotice | undefined {
+  if (model?.provider !== "opencode-go" || typeof model.id !== "string") {
+    return undefined;
+  }
+  if (!DEEPSEEK_PEAK_MODEL_IDS.has(model.id)) {
+    return undefined;
+  }
+
+  const day = now.getUTCDay();
+  if (day === 0 || day === 6) {
+    return undefined;
+  }
+  const hour = now.getUTCHours() + now.getUTCMinutes() / 60;
+  for (const [start, end] of DEEPSEEK_PEAK_WINDOWS_UTC) {
+    if (hour >= start && hour < end) {
+      const endsAt = new Date(now);
+      endsAt.setUTCHours(end, 0, 0, 0);
+      return {
+        text: `DeepSeek peak: 2x until ${PEAK_END_FORMAT.format(endsAt)}. Half price after.`,
+        level: "warning",
+      };
+    }
+  }
+  return undefined;
+}
+
 // ─── Progress bar ────────────────────────────────────────────────────────────
 //
 // A plain left-to-right fill: the used portion and the remainder are two
@@ -909,11 +976,34 @@ export default function (pi: ExtensionAPI) {
     }
   };
 
+  // ─── DeepSeek peak toast ────────────────────────────────────────────────
+  // One notice per peak window per model: switching away and back within the
+  // same window stays silent — a reminder, not a nag. The key carries the
+  // window's end time, so the next window speaks again.
+  let lastPeakNoticeKey: string | undefined;
+
+  const notifyPeakOnce = (
+    model: { provider?: string; id?: string } | undefined,
+    ui: ExtensionUIContext,
+  ) => {
+    const notice = deepseekPeakNotice(model);
+    if (!notice) {
+      return;
+    }
+    const key = `${model?.id}:${notice.text}`;
+    if (key === lastPeakNoticeKey) {
+      return;
+    }
+    lastPeakNoticeKey = key;
+    ui.notify(notice.text, notice.level);
+  };
+
   pi.on("session_start", (event, ctx: ExtensionContext) => {
     if (ctx.mode !== "tui") {
       return;
     }
     setGoStatusForModel(ctx.model, ctx.ui);
+    notifyPeakOnce(ctx.model, ctx.ui);
   });
 
   // Fires on /model, model cycling, and session restore with the new model.
@@ -922,6 +1012,7 @@ export default function (pi: ExtensionAPI) {
       return;
     }
     setGoStatusForModel(event.model, ctx.ui);
+    notifyPeakOnce(event.model, ctx.ui);
   });
 
   pi.on("session_shutdown", (event, ctx: ExtensionContext) => {
