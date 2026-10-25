@@ -336,6 +336,14 @@ export async function fetchGoUsageState(
     } catch {
       // fall through to raw snippet
     }
+    if (status === 401) {
+      // Credential present but no longer accepted — lapsed or rotated.
+      return {
+        state: "expired",
+        message: `OpenCode Go rejected the stored credential.${detail ? ` ${detail}` : ""}`,
+        reauthHint: "Re-authenticate: run /login opencode inside pi, or refresh OPENCODE_GO_API_KEY.",
+      };
+    }
     if (status === 403 && /subscription required|entitlement/i.test(detail)) {
       return { state: "error", message: detail || "OpenCode Go subscription required." };
     }
@@ -465,9 +473,9 @@ export function createOpenCodeGoProvider(): UsageProvider {
       const auth = await resolveGoApiKey();
       if (!auth.key) {
         return {
-          state: "error",
-          message: "No OpenCode Go API key found.",
-          authHint:
+          state: "unconfigured",
+          message: "OpenCode Go is not configured on this machine.",
+          setupHint:
             "Set OPENCODE_GO_API_KEY (or OPENCODE_API_KEY), sign in with the opencode CLI " +
             "(~/.local/share/opencode/auth.json), or run /login opencode inside pi.",
         };

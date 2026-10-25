@@ -19,6 +19,10 @@ export interface UsageWindow {
 
 export type UsageState =
   | { state: "ready"; windows: UsageWindow[]; note?: string; source?: string; updatedAt: Date }
+  /** No credential on this machine — a setup gap, not a failure. Renders calm. */
+  | { state: "unconfigured"; message: string; setupHint?: string }
+  /** Credential present but rejected or lapsed — actionable, not alarming. */
+  | { state: "expired"; message: string; reauthHint?: string }
   | { state: "error"; message: string; authHint?: string };
 
 export interface UsageProvider {

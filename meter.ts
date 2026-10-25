@@ -156,6 +156,10 @@ export class UsageMeter {
     const state = entry.state;
     if (entry.refreshError) return { glyph: "!", color: "warning" };
     if (!state) return { glyph: "…", color: "dim" };
+    // Not-configured is a setup gap, not a failure — dim, not ✕. Expired
+    // needs action but isn't broken: warning glyph.
+    if (state.state === "unconfigured") return { glyph: "–", color: "dim" };
+    if (state.state === "expired") return { glyph: "!", color: "warning" };
     if (state.state === "error") return { glyph: "✕", color: "warning" };
     return { glyph: "✓", color: "success" };
   }
@@ -245,6 +249,25 @@ export class UsageMeter {
 
       if (!state) {
         addWrapped(theme.fg("warning", "Fetching usage…"));
+        addBlank();
+        return;
+      }
+
+      if (state.state === "unconfigured") {
+        // Calm register: nothing failed — this machine just isn't set up.
+        addWrapped(theme.fg("muted", state.message));
+        if (state.setupHint) {
+          addWrapped(theme.fg("dim", state.setupHint));
+        }
+        addBlank();
+        return;
+      }
+
+      if (state.state === "expired") {
+        addWrapped(theme.fg("warning", state.message));
+        if (state.reauthHint) {
+          addWrapped(theme.fg("dim", state.reauthHint));
+        }
         addBlank();
         return;
       }
