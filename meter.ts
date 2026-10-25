@@ -171,7 +171,8 @@ export class UsageMeter {
     // focus band; the eye scans within it vertically (label column, bar column,
     // % column all line up) instead of sweeping the full width.
     const METER_WIDTH = 72;
-    const LABEL_COL = 9;
+    const LABEL_COL = 9; // floor; the column widens to the provider's longest label (capped 32)
+    let labelCol = LABEL_COL;
     const BAR_WIDTH = 30;
     const panelWidth = Math.max(10, Math.min(width, METER_WIDTH));
     const contentWidth = Math.max(10, panelWidth - 2);
@@ -191,8 +192,8 @@ export class UsageMeter {
       }
     };
     const addWindowRow = (usageWindow: UsageWindow, usedPercent: number, money?: string, moneyIsError = false) => {
-      const barWidth = Math.max(12, Math.min(BAR_WIDTH, contentWidth - LABEL_COL - 12));
-      const labelText = truncateToWidth(usageWindow.label, LABEL_COL, "…").padEnd(LABEL_COL);
+      const barWidth = Math.max(12, Math.min(BAR_WIDTH, contentWidth - labelCol - 12));
+      const labelText = truncateToWidth(usageWindow.label, labelCol, "…").padEnd(labelCol);
       const pctText = formatUsedPercent(usedPercent).padStart(9);
       const bar = renderProgressBar(theme, {
         width: barWidth,
@@ -208,9 +209,9 @@ export class UsageMeter {
         if (usageWindow.resetAt instanceof Date) {
           parts.push(theme.fg("dim", `resets ${formatAbsoluteResetTime(usageWindow.resetAt)}`));
         }
-        addLine(`${" ".repeat(LABEL_COL + 1)}${parts.join(" · ")}`);
+        addLine(`${" ".repeat(labelCol + 1)}${parts.join(" · ")}`);
       } else if (usageWindow.resetAt instanceof Date) {
-        addLine(`${" ".repeat(LABEL_COL + 1)}${theme.fg("dim", `resets ${formatAbsoluteResetTime(usageWindow.resetAt)}`)}`);
+        addLine(`${" ".repeat(labelCol + 1)}${theme.fg("dim", `resets ${formatAbsoluteResetTime(usageWindow.resetAt)}`)}`);
       }
     };
 
@@ -256,6 +257,12 @@ export class UsageMeter {
         addBlank();
         return;
       }
+
+      // Size the label column to this provider's longest window label so
+      // plan-attributed labels like "1024 Dev Day · GLM-5.3" stay readable
+      // instead of truncating to "1024 Dev…".
+      const longestLabel = Math.max(0, ...state.windows.map((w) => [...w.label].length));
+      labelCol = Math.max(LABEL_COL, Math.min(32, longestLabel));
 
       for (const usageWindow of state.windows) {
         const usedPercent = clampPercent(usageWindow.usedPercent ?? 0);
